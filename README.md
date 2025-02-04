@@ -1,6 +1,6 @@
-# Fast template for developing a new Rust project
+# FastPool: An object pool for Async Rust
 
-Use this repository as a GitHub template to quickly start a new Rust project.
+To be documented.
 
 ## License
 

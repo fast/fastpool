@@ -13,7 +13,7 @@
 # limitations under the License.
 
 [package]
-name = "template"
+name = "fastpool"
 version = "0.1.0"
 
 edition.workspace = true

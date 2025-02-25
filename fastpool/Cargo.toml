@@ -25,6 +25,10 @@ rust-version.workspace = true
 
 [dependencies]
 mea = { version = "0.3.0" }
+scopeguard = { version = "1.2.0" }
+
+[dev-dependencies]
+tokio = { version = "1.43.0", features = ["full"] }
 
 [lints]
 workspace = true

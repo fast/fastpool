@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
@@ -65,10 +67,41 @@ impl PoolConfig {
     }
 }
 
+/// The result returned by [`Pool::retain`].
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct RetainResult<T> {
+    /// The number of retained objects.
+    pub retained: usize,
+    /// The objects removed from the pool.
+    pub removed: Vec<T>,
+}
+
+/// The current pool status.
+///
+/// See [`Pool::status`].
+#[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
+pub struct PoolStatus {
+    /// The maximum size of the pool.
+    pub max_size: usize,
+
+    /// The current size of the pool.
+    pub current_size: usize,
+
+    /// The number of idle objects in the pool.
+    pub idle_count: usize,
+
+    /// The number of futures waiting for an object.
+    pub wait_count: usize,
+}
+
 pub struct Pool<M: ManageObject> {
     config: PoolConfig,
     manager: M,
 
+    /// A counter that tracks the sum of waiters + obtained objects.
+    users: AtomicUsize,
     /// A semaphore that limits the maximum of users of the pool.
     permits: Semaphore,
     /// A deque that holds the objects.
@@ -91,6 +124,7 @@ where
         f.debug_struct("Pool")
             .field("slots", &self.slots)
             .field("config", &self.config)
+            .field("users", &self.users)
             .field("permits", &self.permits)
             .finish()
     }
@@ -98,6 +132,7 @@ where
 
 impl<M: ManageObject> Pool<M> {
     pub fn new(config: PoolConfig, manager: M) -> Arc<Self> {
+        let users = AtomicUsize::new(0);
         let permits = Semaphore::new(config.max_size);
         let slots = Mutex::new(PoolDeque {
             deque: VecDeque::with_capacity(config.max_size),
@@ -108,6 +143,7 @@ impl<M: ManageObject> Pool<M> {
         Arc::new(Self {
             config,
             manager,
+            users,
             permits,
             slots,
         })
@@ -115,6 +151,11 @@ impl<M: ManageObject> Pool<M> {
 
     pub async fn get(self: &Arc<Self>) -> Result<Object<M>, M::Error> {
         let permit = self.permits.acquire(1).await;
+
+        self.users.fetch_add(1, Ordering::Relaxed);
+        let guard = scopeguard::guard((), |()| {
+            self.users.fetch_sub(1, Ordering::Relaxed);
+        });
 
         let object = loop {
             let existing = match self.config.queue_strategy {
@@ -157,8 +198,104 @@ impl<M: ManageObject> Pool<M> {
             };
         };
 
+        scopeguard::ScopeGuard::into_inner(guard);
         permit.forget();
         Ok(object)
+    }
+
+    /// Retains only the objects that pass the given predicate.
+    ///
+    /// This function blocks the entire pool. Therefore, the given function should not block.
+    ///
+    /// The following example starts a background task that runs every 30 seconds and removes
+    /// objects from the pool that have not been used for more than one minute.
+    ///
+    /// ```rust,ignore
+    /// let interval = Duration::from_secs(30);
+    /// let max_age = Duration::from_secs(60);
+    /// tokio::spawn(async move {
+    ///     loop {
+    ///         tokio::time::sleep(interval).await;
+    ///         pool.retain(|_, status| status.last_used().elapsed() < max_age);
+    ///     }
+    /// });
+    /// ```
+    pub fn retain(
+        &self,
+        mut f: impl FnMut(&mut M::Object, ObjectStatus) -> bool,
+    ) -> RetainResult<M::Object> {
+        let mut slots = self.slots.lock();
+
+        let len = slots.deque.len();
+        let mut idx = 0;
+        let mut cur = 0;
+
+        // Stage 1: All values are retained.
+        while cur < len {
+            let state = &mut slots.deque[cur];
+            if !f(&mut state.o, state.status) {
+                cur += 1;
+                break;
+            }
+            cur += 1;
+            idx += 1;
+        }
+
+        // Stage 2: Swap retained value into current idx.
+        while cur < len {
+            let state = &mut slots.deque[cur];
+            if !f(&mut state.o, state.status) {
+                cur += 1;
+                continue;
+            }
+
+            slots.deque.swap(idx, cur);
+            cur += 1;
+            idx += 1;
+        }
+
+        // Stage 3: Truncate all values after idx.
+        let removed = if cur != idx {
+            let removed = slots.deque.split_off(idx);
+            slots.current_size -= removed.len();
+            removed.into_iter().map(|state| state.o).collect()
+        } else {
+            Vec::new()
+        };
+
+        RetainResult {
+            retained: idx,
+            removed,
+        }
+    }
+
+    /// Returns the current status of the pool.
+    ///
+    /// The status returned by the pool is not guaranteed to be consistent.
+    ///
+    /// While this features provides [eventual consistency], the numbers will be
+    /// off when accessing the status of a pool under heavy load. These numbers
+    /// are meant for an overall insight.
+    ///
+    /// [eventual consistency]: (https://en.wikipedia.org/wiki/Eventual_consistency)
+    pub fn status(&self) -> PoolStatus {
+        let slots = self.slots.lock();
+        let (current_size, max_size) = (slots.current_size, slots.max_size);
+        drop(slots);
+
+        let users = self.users.load(Ordering::Relaxed);
+        let (idle_count, wait_count) = if users < current_size {
+            (current_size - users, 0)
+        } else {
+            (0, users - current_size)
+        };
+
+        PoolStatus {
+            max_size,
+            current_size,
+            idle_count,
+            wait_count,
+        }
     }
 
     fn push_back(&self, o: ObjectState<M::Object>) {
@@ -173,6 +310,8 @@ impl<M: ManageObject> Pool<M> {
 
         slots.deque.push_back(o);
         drop(slots);
+
+        self.users.fetch_sub(1, Ordering::Relaxed);
         self.permits.release(1);
     }
 
@@ -188,6 +327,8 @@ impl<M: ManageObject> Pool<M> {
 
         slots.current_size -= 1;
         drop(slots);
+
+        self.users.fetch_sub(1, Ordering::Relaxed);
         self.permits.release(1);
         self.manager.on_detached(o);
     }

@@ -1,4 +1,4 @@
-# Copyright 2024 FastLabs Developers
+# Copyright 2025 FastLabs Developers
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,6 +24,11 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+mea = { version = "0.3.0" }
+scopeguard = { version = "1.2.0" }
+
+[dev-dependencies]
+tokio = { version = "1.43.0", features = ["full"] }
 
 [lints]
 workspace = true

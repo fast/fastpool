@@ -14,9 +14,7 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
 
-use mea::latch::Latch;
 use mea::semaphore::Semaphore;
 
 use crate::mutex::Mutex;
@@ -65,22 +63,7 @@ impl PoolConfig {
     }
 }
 
-#[derive(Clone)]
 pub struct Pool<M: ManageObject> {
-    state: Arc<PoolState<M>>,
-}
-
-impl<M> std::fmt::Debug for Pool<M>
-where
-    M: ManageObject,
-    M::Object: std::fmt::Debug,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        (*self.state).fmt(f)
-    }
-}
-
-struct PoolState<M: ManageObject> {
     config: PoolConfig,
     manager: M,
 
@@ -88,8 +71,6 @@ struct PoolState<M: ManageObject> {
     users: AtomicUsize,
     /// A semaphore that limits the number of objects in the pool.
     permits: Semaphore,
-    /// A countdown latch that is released when the pool is being shutdown.
-    shutdown: Latch,
     /// A deque that holds the objects.
     slots: Mutex<PoolDeque<M::Object>>,
 }
@@ -101,7 +82,7 @@ struct PoolDeque<T> {
     max_size: usize,
 }
 
-impl<M> std::fmt::Debug for PoolState<M>
+impl<M> std::fmt::Debug for Pool<M>
 where
     M: ManageObject,
     M::Object: std::fmt::Debug,
@@ -112,12 +93,11 @@ where
             .field("config", &self.config)
             .field("users", &self.users)
             .field("permits", &self.permits)
-            .field("shutdown", &self.shutdown)
             .finish()
     }
 }
 
-impl<M: ManageObject> PoolState<M> {
+impl<M: ManageObject> Pool<M> {
     fn push_back(&self, mut o: M::Object) {
         let mut slots = self.slots.lock();
         if slots.current_size <= slots.max_size {

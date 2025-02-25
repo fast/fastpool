@@ -20,9 +20,9 @@ use std::time::Instant;
 pub struct ObjectStatus {
     created: Instant,
     /// The instant when this object was last used.
-    recycled: Option<Instant>,
+    pub(crate) recycled: Option<Instant>,
     /// The number of times the object was recycled.
-    recycle_count: usize,
+    pub(crate) recycle_count: usize,
 }
 
 impl Default for ObjectStatus {

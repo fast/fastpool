@@ -18,6 +18,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use mea::semaphore::OwnedSemaphorePermit;
 use mea::semaphore::Semaphore;
 
 use crate::mutex::Mutex;
@@ -103,7 +104,7 @@ pub struct Pool<M: ManageObject> {
     /// A counter that tracks the sum of waiters + obtained objects.
     users: AtomicUsize,
     /// A semaphore that limits the maximum of users of the pool.
-    permits: Semaphore,
+    permits: Arc<Semaphore>,
     /// A deque that holds the objects.
     slots: Mutex<PoolDeque<ObjectState<M::Object>>>,
 }
@@ -133,7 +134,7 @@ where
 impl<M: ManageObject> Pool<M> {
     pub fn new(config: PoolConfig, manager: M) -> Arc<Self> {
         let users = AtomicUsize::new(0);
-        let permits = Semaphore::new(config.max_size);
+        let permits = Arc::new(Semaphore::new(config.max_size));
         let slots = Mutex::new(PoolDeque {
             deque: VecDeque::with_capacity(config.max_size),
             current_size: 0,
@@ -150,7 +151,7 @@ impl<M: ManageObject> Pool<M> {
     }
 
     pub async fn get(self: &Arc<Self>) -> Result<Object<M>, M::Error> {
-        let permit = self.permits.acquire(1).await;
+        let permit = self.permits.clone().acquire_owned(1).await;
 
         self.users.fetch_add(1, Ordering::Relaxed);
         let guard = scopeguard::guard((), |()| {
@@ -173,6 +174,7 @@ impl<M: ManageObject> Pool<M> {
                     self.slots.lock().current_size += 1;
                     break Object {
                         state: Some(state),
+                        permit,
                         pool: Arc::downgrade(self),
                     };
                 }
@@ -192,14 +194,13 @@ impl<M: ManageObject> Pool<M> {
                     {
                         state.status.recycle_count += 1;
                         state.status.recycled = Some(std::time::Instant::now());
-                        break unready_object.ready();
+                        break unready_object.ready(permit);
                     }
                 }
             };
         };
 
         scopeguard::ScopeGuard::into_inner(guard);
-        permit.forget();
         Ok(object)
     }
 
@@ -312,10 +313,9 @@ impl<M: ManageObject> Pool<M> {
         drop(slots);
 
         self.users.fetch_sub(1, Ordering::Relaxed);
-        self.permits.release(1);
     }
 
-    fn detach_object(&self, o: &mut M::Object) {
+    fn detach_object(&self, o: &mut M::Object, ready: bool) {
         let mut slots = self.slots.lock();
 
         assert!(
@@ -328,14 +328,19 @@ impl<M: ManageObject> Pool<M> {
         slots.current_size -= 1;
         drop(slots);
 
-        self.users.fetch_sub(1, Ordering::Relaxed);
-        self.permits.release(1);
+        if ready {
+            self.users.fetch_sub(1, Ordering::Relaxed);
+        } else {
+            // if the object is not ready, users count decrement is handled in the caller side,
+            // that is, on existing the `Pool::get` method.
+        }
         self.manager.on_detached(o);
     }
 }
 
 pub struct Object<M: ManageObject> {
     state: Option<ObjectState<M::Object>>,
+    permit: OwnedSemaphorePermit,
     pool: Weak<Pool<M>>,
 }
 
@@ -347,6 +352,7 @@ where
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Object")
             .field("state", &self.state)
+            .field("permit", &self.permit)
             .finish()
     }
 }
@@ -396,7 +402,7 @@ impl<M: ManageObject> Object<M> {
         // SAFETY: `state` is always `Some` when `Object` is owned.
         let mut o = self.state.take().unwrap().o;
         if let Some(pool) = self.pool.upgrade() {
-            pool.detach_object(&mut o);
+            pool.detach_object(&mut o, true);
         }
         o
     }
@@ -418,22 +424,22 @@ impl<M: ManageObject> Drop for UnreadyObject<M> {
     fn drop(&mut self) {
         if let Some(mut state) = self.state.take() {
             if let Some(pool) = self.pool.upgrade() {
-                // Why not just call `pool.detach_object(&mut state.o)`?
-                // 1. No need to release the permit because the object is not ready.
-                // 2. No need to modify users because it's handle in the caller side.
-                pool.slots.lock().current_size -= 1;
-                pool.manager.on_detached(&mut state.o);
+                pool.detach_object(&mut state.o, false);
             }
         }
     }
 }
 
 impl<M: ManageObject> UnreadyObject<M> {
-    fn ready(mut self) -> Object<M> {
+    fn ready(mut self, permit: OwnedSemaphorePermit) -> Object<M> {
         // SAFETY: `state` is always `Some` when `UnreadyObject` is owned.
         let state = Some(self.state.take().unwrap());
         let pool = self.pool.clone();
-        Object { state, pool }
+        Object {
+            state,
+            permit,
+            pool,
+        }
     }
 
     fn state(&mut self) -> &mut ObjectState<M::Object> {

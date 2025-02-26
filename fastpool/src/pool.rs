@@ -332,7 +332,7 @@ impl<M: ManageObject> Pool<M> {
             self.users.fetch_sub(1, Ordering::Relaxed);
         } else {
             // if the object is not ready, users count decrement is handled in the caller side,
-            // that is, on existing the `Pool::get` method.
+            // that is, on exiting the `Pool::get` method.
         }
         self.manager.on_detached(o);
     }

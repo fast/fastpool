@@ -13,12 +13,20 @@
 // limitations under the License.
 
 use std::str::FromStr;
-use fastpool::{Object, ObjectStatus, Pool, PoolConfig};
-use futures::future::BoxFuture;
-use sqlx::postgres::PgConnectOptions;
-use sqlx::{Acquire, ConnectOptions, Connection, PgConnection, TransactionManager};
 use std::sync::Arc;
 use std::time::Duration;
+
+use fastpool::Object;
+use fastpool::ObjectStatus;
+use fastpool::Pool;
+use fastpool::PoolConfig;
+use futures::future::BoxFuture;
+use sqlx::postgres::PgConnectOptions;
+use sqlx::Acquire;
+use sqlx::ConnectOptions;
+use sqlx::Connection;
+use sqlx::PgConnection;
+use sqlx::TransactionManager;
 
 #[derive(Debug, Clone)]
 pub struct ConnectionPool {

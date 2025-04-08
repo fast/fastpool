@@ -128,10 +128,12 @@ impl std::ops::DerefMut for PostgresTransaction {
     }
 }
 
-// Implement `AsMut<DB::Connection>` so `Transaction` can be given to a
-// `PgAdvisoryLockGuard`.
-//
-// See: https://github.com/launchbadge/sqlx/issues/2520
+impl AsRef<PgConnection> for PostgresTransaction {
+    fn as_ref(&self) -> &PgConnection {
+        &self.conn
+    }
+}
+
 impl AsMut<PgConnection> for PostgresTransaction {
     fn as_mut(&mut self) -> &mut PgConnection {
         &mut self.conn
@@ -163,7 +165,6 @@ impl PostgresTransaction {
     }
 
     /// Aborts this transaction or savepoint.
-    #[allow(dead_code)]
     pub async fn rollback(mut self) -> Result<(), sqlx::Error> {
         <sqlx::Postgres as sqlx::Database>::TransactionManager::rollback(&mut self.conn).await?;
         self.open = false;

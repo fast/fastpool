@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -97,6 +99,13 @@ pub struct PoolStatus {
     pub wait_count: usize,
 }
 
+/// Generic runtime-agnostic object pool for Async Rust.
+///
+/// You can use it for reusing objects that are expensive to create, like database connections.
+///
+/// Typically, this pool should be wrapped in an [`Arc`] in order to call [`Pool::get`]. This
+/// is intended so that the user can leverage [`Arc::downgrade`] for running background
+/// maintenance tasks.
 pub struct Pool<M: ManageObject> {
     config: PoolConfig,
     manager: M,
@@ -132,6 +141,7 @@ where
 }
 
 impl<M: ManageObject> Pool<M> {
+    /// Creates a new [`Pool`].
     pub fn new(config: PoolConfig, manager: M) -> Arc<Self> {
         let users = AtomicUsize::new(0);
         let permits = Arc::new(Semaphore::new(config.max_size));
@@ -150,6 +160,9 @@ impl<M: ManageObject> Pool<M> {
         })
     }
 
+    /// Retrieves an [`Object`] from this [`Pool`].
+    ///
+    /// This method should be called with an [`Arc`] of the pool.
     pub async fn get(self: &Arc<Self>) -> Result<Object<M>, M::Error> {
         let permit = self.permits.clone().acquire_owned(1).await;
 
@@ -338,6 +351,13 @@ impl<M: ManageObject> Pool<M> {
     }
 }
 
+/// A wrapper of the actual pooled object.
+///
+/// This object implements [`Deref`] and [`DerefMut`]. You can use it as if it was of type
+/// `M::Object`.
+///
+/// This object implements [`Drop`] that returns the underlying object to the pool on drop. You may
+/// call [`Object::detach`] to detach the object from the pool before dropping it.
 pub struct Object<M: ManageObject> {
     state: Option<ObjectState<M::Object>>,
     permit: OwnedSemaphorePermit,
@@ -367,7 +387,7 @@ impl<M: ManageObject> Drop for Object<M> {
     }
 }
 
-impl<M: ManageObject> std::ops::Deref for Object<M> {
+impl<M: ManageObject> Deref for Object<M> {
     type Target = M::Object;
     fn deref(&self) -> &M::Object {
         // SAFETY: `state` is always `Some` when `Object` is owned.
@@ -375,7 +395,7 @@ impl<M: ManageObject> std::ops::Deref for Object<M> {
     }
 }
 
-impl<M: ManageObject> std::ops::DerefMut for Object<M> {
+impl<M: ManageObject> DerefMut for Object<M> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         // SAFETY: `state` is always `Some` when `Object` is owned.
         &mut self.state.as_mut().unwrap().o

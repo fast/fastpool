@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A fast object pool for Rust.
+#![deny(missing_docs)]
+
+//! A fast object pool for Async Rust.
+//!
+//! # Overview
+//!
+//! Fastpool provides a runtime-agnostic fast object pool for Async Rust. You can define your own
+//! [`ManageObject`] implementation to manage the lifecycle of the objects in the pool.
 //!
 //! # Example
 //!

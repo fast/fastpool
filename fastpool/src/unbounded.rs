@@ -149,6 +149,11 @@ pub struct PoolStatus {
 }
 
 /// The default [`ManageObject`] implementation for unbounded pool.
+///
+/// * [`NeverManageObject::create`] always returns [`PoolIsEmpty`] so that [`Pool::get`] would get
+///   the error if no object is in the pool.
+/// * [`NeverManageObject::is_recyclable`] always returns `Ok(())` so that any object is always
+///   recyclable.
 #[derive(Debug, Copy, Clone)]
 pub struct NeverManageObject<T: Send + Sync> {
     _marker: std::marker::PhantomData<T>,

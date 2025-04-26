@@ -22,7 +22,6 @@ rust-version.workspace = true
 
 [dependencies]
 fastpool = { workspace = true }
-
 futures = { workspace = true }
 tokio = { workspace = true }
 

@@ -205,7 +205,9 @@ impl<M: ManageObject> Pool<M> {
 
     /// Retrieves an [`Object`] from this [`Pool`].
     ///
-    /// This method should be called with a pool wrapped in an [`Arc`].
+    /// This method should be called with a pool wrapped in an [`Arc`]. If the pool reaches the
+    /// maximum size, this method would block until an object is returned to the pool or an object
+    /// is detached from the pool.
     pub async fn get(self: &Arc<Self>) -> Result<Object<M>, M::Error> {
         let permit = self.permits.clone().acquire_owned(1).await;
 

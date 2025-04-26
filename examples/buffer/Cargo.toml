@@ -12,23 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-[workspace]
-members = ["buffer", "postgres"]
-resolver = "2"
+[package]
+name = "buffer"
+version = "0.1.0"
 
-[workspace.package]
-edition = "2021"
-publish = false
-rust-version = "1.80.0"
+edition.workspace = true
+publish.workspace = true
+rust-version.workspace = true
 
-[workspace.dependencies]
-fastpool = { path = "../fastpool" }
+[dependencies]
+fastpool = { workspace = true }
+tokio = { workspace = true }
 
-futures = { version = "0.3.31" }
-tokio = { version = "1.43.0", features = ["full"] }
-
-[workspace.lints.rust]
-unknown_lints = "deny"
-
-[workspace.lints.clippy]
-dbg_macro = "deny"
+[lints]
+workspace = true

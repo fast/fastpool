@@ -61,15 +61,12 @@
 //! # }
 //! ```
 
-mod manage;
-mod mutex;
-mod pool;
+pub use common::ManageObject;
+pub use common::ObjectStatus;
+pub use common::QueueStrategy;
 
-pub use manage::ManageObject;
-pub use manage::ObjectStatus;
-pub use pool::Object;
-pub use pool::Pool;
-pub use pool::PoolConfig;
-pub use pool::PoolStatus;
-pub use pool::QueueStrategy;
-pub use pool::RetainResult;
+mod common;
+mod mutex;
+
+pub mod bounded;
+pub mod unbounded;

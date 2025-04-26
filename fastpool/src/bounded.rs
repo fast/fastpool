@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Bounded object pools.
+
 use std::collections::VecDeque;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -26,20 +28,7 @@ use mea::semaphore::Semaphore;
 use crate::mutex::Mutex;
 use crate::ManageObject;
 use crate::ObjectStatus;
-
-/// Queue strategy when deque objects from the [`Pool`].
-#[derive(Debug, Default, Clone, Copy)]
-pub enum QueueStrategy {
-    /// First in first out.
-    ///
-    /// This strategy behaves like a queue.
-    #[default]
-    Fifo,
-    /// Last in first out.
-    ///
-    /// This strategy behaves like a stack.
-    Lifo,
-}
+use crate::QueueStrategy;
 
 /// The configuration of [`Pool`].
 #[derive(Clone, Copy, Debug)]

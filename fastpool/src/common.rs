@@ -53,7 +53,7 @@ impl ObjectStatus {
 }
 
 /// A trait whose instance creates new objects and recycles existing ones.
-pub trait ManageObject: Sync + Send {
+pub trait ManageObject: Send + Sync {
     /// The type of objects that this instance creates and recycles.
     type Object: Send;
 
@@ -77,4 +77,18 @@ pub trait ManageObject: Sync + Send {
     /// If this instance does not hold any references to the object, then the default
     /// implementation can be used which does nothing.
     fn on_detached(&self, _o: &mut Self::Object) {}
+}
+
+/// Queue strategy when deque objects from the object pool.
+#[derive(Debug, Default, Clone, Copy)]
+pub enum QueueStrategy {
+    /// First in first out.
+    ///
+    /// This strategy behaves like a queue.
+    #[default]
+    Fifo,
+    /// Last in first out.
+    ///
+    /// This strategy behaves like a stack.
+    Lifo,
 }

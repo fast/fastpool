@@ -13,7 +13,7 @@
 # limitations under the License.
 
 [package]
-name = "sqlx-postgres"
+name = "postgres"
 version = "0.1.0"
 
 edition.workspace = true

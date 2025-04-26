@@ -13,6 +13,84 @@
 // limitations under the License.
 
 //! Unbounded object pools.
+//!
+//! An unbounded pool, on the other hand, allows you to put objects to the pool manually. You can
+//! use it like Go's [`sync.Pool`](https://pkg.go.dev/sync#Pool).
+//!
+//! To configure a factory for creating objects when the pool is empty, like `sync.Pool`'s `New`,
+//! you can create the unbounded pool via [`Pool::new`](Pool::new) with an
+//! implementation of [`ManageObject`].
+//!
+//! ## Examples
+//!
+//! Read the following simple demos or more complex examples in the examples directory.
+//!
+//! 1. Create an unbounded pool with [`NeverManageObject`]:
+//!
+//! ```
+//! use fastpool::unbounded::Pool;
+//! use fastpool::unbounded::PoolConfig;
+//!
+//! # #[tokio::main]
+//! # async fn main() {
+//! let pool = Pool::<Vec<u8>>::from_config(PoolConfig::default());
+//!
+//! let result = pool.get().await;
+//! assert_eq!(result.unwrap_err().to_string(), "unbounded pool is empty");
+//!
+//! pool.put(Vec::with_capacity(1024));
+//! let o = pool.get().await.unwrap();
+//! assert_eq!(o.capacity(), 1024);
+//! drop(o);
+//! let o = pool.get().await.unwrap();
+//! assert_eq!(o.capacity(), 1024);
+//! let result = pool.get().await;
+//! assert_eq!(result.unwrap_err().to_string(), "unbounded pool is empty");
+//! # }
+//! ```
+//!
+//! 2. Create an unbounded pool with a custom [`ManageObject`] (object factory):
+//!
+//! ```
+//! use std::future::Future;
+//!
+//! use fastpool::unbounded::Pool;
+//! use fastpool::unbounded::PoolConfig;
+//! use fastpool::ManageObject;
+//! use fastpool::ObjectStatus;
+//!
+//! struct Compute;
+//! impl Compute {
+//!     async fn do_work(&self) -> i32 {
+//!         42
+//!     }
+//! }
+//!
+//! struct Manager;
+//! impl ManageObject for Manager {
+//!     type Object = Compute;
+//!     type Error = ();
+//!
+//!     async fn create(&self) -> Result<Self::Object, Self::Error> {
+//!         Ok(Compute)
+//!     }
+//!
+//!     async fn is_recyclable(
+//!         &self,
+//!         o: &mut Self::Object,
+//!         status: &ObjectStatus,
+//!     ) -> Result<(), Self::Error> {
+//!         Ok(())
+//!     }
+//! }
+//!
+//! # #[tokio::main]
+//! # async fn main() {
+//! let pool = Pool::new(PoolConfig::default(), Manager);
+//! let o = pool.get().await.unwrap();
+//! assert_eq!(o.do_work().await, 42);
+//! # }
+//! ```
 
 use std::collections::VecDeque;
 use std::future::Future;
@@ -118,13 +196,9 @@ impl<T: Send + Sync> ManageObject for NeverManageObject<T> {
     }
 }
 
-/// Generic runtime-agnostic object pool for Async Rust.
+/// Generic runtime-agnostic unbounded object pool.
 ///
-/// You can use it for reusing objects that are expensive to create, like database connections.
-///
-/// Typically, this pool should be wrapped in an [`Arc`] in order to call [`Pool::get`]. This
-/// is intended so that the user can leverage [`Arc::downgrade`] for running background
-/// maintenance tasks.
+/// See the [module level documentation](self) for more.
 pub struct Pool<T, M: ManageObject<Object = T> = NeverManageObject<T>> {
     config: PoolConfig,
     manager: M,
@@ -153,14 +227,14 @@ where
 }
 
 impl<T: Send + Sync> Pool<T> {
-    /// Creates a new [`Pool`] from config and [`NeverManageObject`].
+    /// Creates a new [`Pool`] from config and the [`NeverManageObject`].
     pub fn from_config(config: PoolConfig) -> Arc<Self> {
         Self::new(config, NeverManageObject::<T>::default())
     }
 }
 
 impl<T, M: ManageObject<Object = T>> Pool<T, M> {
-    /// Creates a new [`Pool`].
+    /// Creates a new [`Pool`] with config and the specified [`ManageObject`].
     pub fn new(config: PoolConfig, manager: M) -> Arc<Self> {
         let slots = Mutex::new(PoolDeque {
             deque: VecDeque::new(),
@@ -176,7 +250,7 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
 
     /// Retrieves an [`Object`] from this [`Pool`].
     ///
-    /// This method should be called with an [`Arc`] of the pool.
+    /// This method should be called with a pool wrapped in an [`Arc`].
     pub async fn get(self: &Arc<Self>) -> Result<Object<T, M>, M::Error> {
         let object = loop {
             let existing = match self.config.queue_strategy {
@@ -222,8 +296,8 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
         Ok(object)
     }
 
-    ///
-    pub fn put(self: &Arc<Self>, o: T) {
+    /// Put an object to the pool.
+    pub fn put(&self, o: T) {
         let mut slots = self.slots.lock();
         slots.current_size += 1;
         slots.deque.push_back(ObjectState {
@@ -269,8 +343,7 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
 
 /// A wrapper of the actual pooled object.
 ///
-/// This object implements [`Deref`] and [`DerefMut`]. You can use it as if it was of type
-/// `M::Object`.
+/// This object implements [`Deref`] and [`DerefMut`]. You can use it as if it was of type `T`.
 ///
 /// This object implements [`Drop`] that returns the underlying object to the pool on drop. You may
 /// call [`Object::detach`] to detach the object from the pool before dropping it.

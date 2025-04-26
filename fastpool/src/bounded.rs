@@ -13,6 +13,64 @@
 // limitations under the License.
 
 //! Bounded object pools.
+//!
+//! A bounded pool creates and recycles objects with full management. You _cannot_ put an object to
+//! the pool manually.
+//!
+//! The pool is bounded by the `max_size` config option of [`PoolConfig`]. If the pool reaches the
+//! maximum size, it will block all the [`Pool::get`] calls until an object is returned to the pool
+//! or an object is detached from the pool.
+//!
+//! Typically, a bounded pool is used wrapped in an [`Arc`] in order to call [`Pool::get`].
+//! This is intended so that users can leverage [`Arc::downgrade`] for running background
+//! maintenance tasks (e.g., [`Pool::retain`]).
+//!
+//! Bounded pools are useful for pooling database connections.
+//!
+//! ## Examples
+//!
+//! Read the following simple demo or more complex examples in the examples directory.
+//!
+//! ```
+//! use std::future::Future;
+//!
+//! use fastpool::bounded::Pool;
+//! use fastpool::bounded::PoolConfig;
+//! use fastpool::ManageObject;
+//! use fastpool::ObjectStatus;
+//!
+//! struct Compute;
+//! impl Compute {
+//!     async fn do_work(&self) -> i32 {
+//!         42
+//!     }
+//! }
+//!
+//! struct Manager;
+//! impl ManageObject for Manager {
+//!     type Object = Compute;
+//!     type Error = ();
+//!
+//!     async fn create(&self) -> Result<Self::Object, Self::Error> {
+//!         Ok(Compute)
+//!     }
+//!
+//!     async fn is_recyclable(
+//!         &self,
+//!         o: &mut Self::Object,
+//!         status: &ObjectStatus,
+//!     ) -> Result<(), Self::Error> {
+//!         Ok(())
+//!     }
+//! }
+//!
+//! # #[tokio::main]
+//! # async fn main() {
+//! let pool = Pool::new(PoolConfig::new(16), Manager);
+//! let o = pool.get().await.unwrap();
+//! assert_eq!(o.do_work().await, 42);
+//! # }
+//! ```
 
 use std::collections::VecDeque;
 use std::ops::Deref;
@@ -88,13 +146,9 @@ pub struct PoolStatus {
     pub wait_count: usize,
 }
 
-/// Generic runtime-agnostic object pool for Async Rust.
+/// Generic runtime-agnostic object pool with a maximum size.
 ///
-/// You can use it for reusing objects that are expensive to create, like database connections.
-///
-/// Typically, this pool should be wrapped in an [`Arc`] in order to call [`Pool::get`]. This
-/// is intended so that the user can leverage [`Arc::downgrade`] for running background
-/// maintenance tasks.
+/// See the [module level documentation](self) for more.
 pub struct Pool<M: ManageObject> {
     config: PoolConfig,
     manager: M,
@@ -151,7 +205,7 @@ impl<M: ManageObject> Pool<M> {
 
     /// Retrieves an [`Object`] from this [`Pool`].
     ///
-    /// This method should be called with an [`Arc`] of the pool.
+    /// This method should be called with a pool wrapped in an [`Arc`].
     pub async fn get(self: &Arc<Self>) -> Result<Object<M>, M::Error> {
         let permit = self.permits.clone().acquire_owned(1).await;
 
@@ -211,15 +265,22 @@ impl<M: ManageObject> Pool<M> {
     /// This function blocks the entire pool. Therefore, the given function should not block.
     ///
     /// The following example starts a background task that runs every 30 seconds and removes
-    /// objects from the pool that have not been used for more than one minute.
+    /// objects from the pool that have not been used for more than one minute. The task will
+    /// terminate if the pool is dropped.
     ///
     /// ```rust,ignore
     /// let interval = Duration::from_secs(30);
     /// let max_age = Duration::from_secs(60);
+    ///
+    /// let weak_pool = Arc::downgrade(&pool);
     /// tokio::spawn(async move {
     ///     loop {
     ///         tokio::time::sleep(interval).await;
-    ///         pool.retain(|_, status| status.last_used().elapsed() < max_age);
+    ///         if let Some(pool) = weak_pool.upgrade() {
+    ///             pool.retain(|_, status| status.last_used().elapsed() < max_age);
+    ///         } else {
+    ///             break;
+    ///         }
     ///     }
     /// });
     /// ```

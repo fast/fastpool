@@ -16,10 +16,10 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use fastpool::Object;
+use fastpool::bounded::Object;
+use fastpool::bounded::Pool;
+use fastpool::bounded::PoolConfig;
 use fastpool::ObjectStatus;
-use fastpool::Pool;
-use fastpool::PoolConfig;
 use futures::future::BoxFuture;
 use sqlx::postgres::PgConnectOptions;
 use sqlx::Acquire;

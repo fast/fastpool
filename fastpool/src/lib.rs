@@ -104,6 +104,96 @@
 //! assert_eq!(o.capacity(), 1024);
 //! # }
 //! ```
+//!
+//! # FAQ
+//!
+//! ## Why does fastpool have no timeout config?
+//!
+//! Many async object pool implementations allow you to configure multiple timeout, like "wait
+//! timeout", "create timeout", "recycle timeout", etc.
+//!
+//! This introduces two major problems:
+//!
+//! First, to support timeouts, the pool must use with a timer implementation like `tokio::time`.
+//! This would prevent the pool from being runtime-agnostic. Theoretically, the pool can depend
+//! on a timer trait, but there is no such a standard trait in the Rust ecosystem yet.
+//!
+//! Second, timeouts options not only add complexity for configuration, but also the value itself
+//! cannot be configured properly at all. For example, end users often care about the total time
+//! used to obtain an object. This is not solely "wait timeout", "create timeout", or
+//! "recycle timeout", but a condition composition of all internal operations.
+//!
+//! Thus, we propose a caller-side timeout solution:
+//!
+//! ```rust,ignore
+//! use std::sync::Arc;
+//! use std::time::Duration;
+//!
+//! use fastpool::bounded::Object;
+//! use fastpool::bounded::Pool;
+//!
+//! #[derive(Debug, Clone)]
+//! pub struct ConnectionPool {
+//!     pool: Arc<Pool<ManageConnection>>,
+//! }
+//!
+//! impl ConnectionPool {
+//!     pub async fn acquire(&self) -> Result<Object<ManageConnection>, Error> {
+//!         const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(60);
+//!
+//!         // note that users can choose any timer implementation here
+//!         let result = tokio::time::timeout(ACQUIRE_TIMEOUT, self.pool.get()).await;
+//!
+//!         // ... processing the result
+//!     }
+//! }
+//! ```
+//!
+//! Check out the postgres example in the examples directory for the complete code.
+//!
+//! ## Why does fastpool have no before/after hooks?
+//!
+//! Similar to the second point of the previous question, the before/after hooks (closures) are
+//! very hard to configure properly. Specific to closures, many Rust code can be easily written
+//! in place, but if you'd like to pass a code block as a closure, then you may encounter a lot of
+//! lifetime and ownership issues. Besides, how to handle `Result` in the closure is also a
+//! headache.
+//!
+//! Fastpool provides an ordinary interface of object pools, so that you should be able to add
+//! any before/after logic in the implementation or using a wrapper.
+//!
+//! For example, all the "post-create", "pre-recycle", and "post-recycle" hooks can be implemented
+//! as:
+//!
+//! ```
+//! use std::future::Future;
+//!
+//! use fastpool::ManageObject;
+//! use fastpool::ObjectStatus;
+//!
+//! struct Manager;
+//! impl ManageObject for Manager {
+//!     type Object = i32;
+//!     type Error = std::convert::Infallible;
+//!
+//!     async fn create(&self) -> Result<Self::Object, Self::Error> {
+//!         let o = 42;
+//!         // any post-create hooks
+//!         Ok(o)
+//!     }
+//!
+//!     async fn is_recyclable(
+//!         &self,
+//!         _o: &mut Self::Object,
+//!         _status: &ObjectStatus,
+//!     ) -> Result<(), Self::Error> {
+//!         // any pre-recycle hooks
+//!         // determinate if is_recyclable
+//!         // any post-recycle hooks
+//!         Ok(())
+//!     }
+//! }
+//! ```
 
 pub use common::ManageObject;
 pub use common::ObjectStatus;

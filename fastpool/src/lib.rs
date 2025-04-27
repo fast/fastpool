@@ -121,7 +121,7 @@
 //! Second, timeouts options not only add complexity for configuration, but also the value itself
 //! cannot be configured properly at all. For example, end users often care about the total time
 //! used to obtain an object. This is not solely "wait timeout", "create timeout", or
-//! "recycle timeout", but a condition composition of all internal operations.
+//! "recycle timeout", but a conditional composition of all internal operations.
 //!
 //! Thus, we propose a caller-side timeout solution:
 //!

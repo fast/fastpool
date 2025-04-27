@@ -34,10 +34,10 @@
 //! ```
 //! use std::future::Future;
 //!
-//! use fastpool::bounded::Pool;
-//! use fastpool::bounded::PoolConfig;
 //! use fastpool::ManageObject;
 //! use fastpool::ObjectStatus;
+//! use fastpool::bounded::Pool;
+//! use fastpool::bounded::PoolConfig;
 //!
 //! struct Compute;
 //! impl Compute {
@@ -75,18 +75,18 @@
 use std::collections::VecDeque;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use mea::semaphore::OwnedSemaphorePermit;
 use mea::semaphore::Semaphore;
 
-use crate::mutex::Mutex;
 use crate::ManageObject;
 use crate::ObjectStatus;
 use crate::QueueStrategy;
+use crate::mutex::Mutex;
 
 /// The configuration of [`Pool`].
 #[derive(Clone, Copy, Debug)]

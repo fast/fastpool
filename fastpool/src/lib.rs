@@ -37,10 +37,10 @@
 //! ```
 //! use std::future::Future;
 //!
-//! use fastpool::bounded::Pool;
-//! use fastpool::bounded::PoolConfig;
 //! use fastpool::ManageObject;
 //! use fastpool::ObjectStatus;
+//! use fastpool::bounded::Pool;
+//! use fastpool::bounded::PoolConfig;
 //!
 //! struct Compute;
 //! impl Compute {

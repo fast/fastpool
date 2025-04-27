@@ -17,9 +17,9 @@ use std::future::Future;
 use std::io::Write;
 use std::time::Instant;
 
+use fastpool::ObjectStatus;
 use fastpool::unbounded::Pool;
 use fastpool::unbounded::PoolConfig;
-use fastpool::ObjectStatus;
 
 struct ManageBuffer;
 
@@ -51,8 +51,16 @@ async fn manual_put_pool() {
     pool.put(Vec::with_capacity(1024));
 
     let mut buf = pool.get().await.unwrap();
-    write!(&mut buf, "{:?} key=manual_put_pool", Instant::now()).unwrap();
+    write!(&mut buf, "{:?} key=manual_put_pool_put", Instant::now()).unwrap();
     println!("{}", String::from_utf8_lossy(&buf));
+
+    let mut buf = pool
+        .get_or_create(async || Ok::<_, Infallible>(Vec::with_capacity(512)))
+        .await
+        .unwrap();
+    write!(&mut buf, "{:?} key=manual_put_pool_create", Instant::now()).unwrap();
+    println!("{}", String::from_utf8_lossy(&buf));
+    assert_eq!(buf.capacity(), 512);
 }
 
 async fn auto_create_pool() {

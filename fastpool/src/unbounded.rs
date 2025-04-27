@@ -54,10 +54,10 @@
 //! ```
 //! use std::future::Future;
 //!
-//! use fastpool::unbounded::Pool;
-//! use fastpool::unbounded::PoolConfig;
 //! use fastpool::ManageObject;
 //! use fastpool::ObjectStatus;
+//! use fastpool::unbounded::Pool;
+//! use fastpool::unbounded::PoolConfig;
 //!
 //! struct Compute;
 //! impl Compute {
@@ -99,10 +99,10 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use crate::mutex::Mutex;
 use crate::ManageObject;
 use crate::ObjectStatus;
 use crate::QueueStrategy;
+use crate::mutex::Mutex;
 
 /// The configuration of [`Pool`].
 #[derive(Clone, Copy, Debug)]
@@ -231,10 +231,52 @@ where
     }
 }
 
+// Methods for `Pool` with `NeverManageObject`.
 impl<T: Send + Sync> Pool<T> {
     /// Creates a new [`Pool`] from config and the [`NeverManageObject`].
     pub fn from_config(config: PoolConfig) -> Arc<Self> {
         Self::new(config, NeverManageObject::<T>::default())
+    }
+
+    /// Retrieves an [`Object`] from this [`Pool`], or creates a new one with the passed-in async
+    /// closure, if the pool is empty.
+    ///
+    /// This method should be called with a pool wrapped in an [`Arc`].
+    ///
+    /// This method only exists for [`NeverManageObject`] pools. If you provide a custom
+    /// [`ManageObject`] implementation, you should use [`Pool::get`] instead, and it will call
+    /// [`ManageObject::create`] to create a new object if the pool is empty.
+    pub async fn get_or_create<E, F>(self: &Arc<Self>, f: F) -> Result<Object<T>, E>
+    where
+        F: AsyncFnOnce() -> Result<T, E> + Send,
+    {
+        let existing = match self.config.queue_strategy {
+            QueueStrategy::Fifo => self.slots.lock().deque.pop_front(),
+            QueueStrategy::Lifo => self.slots.lock().deque.pop_back(),
+        };
+
+        match existing {
+            None => {
+                let object = f().await?;
+                let state = ObjectState {
+                    o: object,
+                    status: ObjectStatus::default(),
+                };
+                self.slots.lock().current_size += 1;
+                Ok(Object {
+                    state: Some(state),
+                    pool: Arc::downgrade(self),
+                })
+            }
+            Some(mut state) => {
+                state.status.recycle_count += 1;
+                state.status.recycled = Some(std::time::Instant::now());
+                Ok(Object {
+                    state: Some(state),
+                    pool: Arc::downgrade(self),
+                })
+            }
+        }
     }
 }
 

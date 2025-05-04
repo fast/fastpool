@@ -48,10 +48,10 @@ This project is licensed under [Apache License, Version 2.0](LICENSE).
 
 This library is derived from the [deadpool](https://docs.rs/deadpool/) crate with several dedicated considerations and a quite different mindset.
 
-You can read the FAQ section on [the docs page](https://docs.rs/fastpool/*/fastpool/#faq) for detailed discussion on "Why does fastpool have no timeout config?" and "Why does fastpool have no before/after hooks?".
+You can read the FAQ section on [the docs page](https://docs.rs/fastpool/*/fastpool/#faq) for detailed discussion on "Why does fastpool have no timeout config?" and "Why does fastpool have no before/after hooks?"
 
 The [postgres example](examples/postgres) and [this issue thread](https://github.com/launchbadge/sqlx/issues/2276#issuecomment-2687157357) is a significant motivation for this crate:
 
 * Keeps the crate runtime-agnostic (see also ["Why does fastpool have no timeout config?"](https://docs.rs/fastpool/*/fastpool/#why-does-fastpool-have-no-timeout-config))
 * Keeps the abstraction really dead simple (see also ["Why does fastpool have no before/after hooks?"](https://docs.rs/fastpool/*/fastpool/#why-does-fastpool-have-no-beforeafter-hooks))
-* Returns an `Arc<Pool>` on creation so that maintenance could be triggered with a weak reference. This helps applications to teardown (drop) the pool easily with Rust's built-in RAII mechanism. See also [this example](https://docs.rs/fastpool/*/fastpool/bounded/struct.Pool.html#method.retain)
+* Returns an `Arc<Pool>` on creation so that maintenance could be triggered with a weak reference. This helps applications to teardown (drop) the pool easily with Rust's built-in RAII mechanism. See also [this example](https://docs.rs/fastpool/*/fastpool/bounded/struct.Pool.html#method.retain).

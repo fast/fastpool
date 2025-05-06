@@ -94,7 +94,7 @@
 //!
 //! # #[tokio::main]
 //! # async fn main() {
-//! let pool = Pool::<Vec<u8>>::from_config(PoolConfig::default());
+//! let pool = Pool::<Vec<u8>>::never_manage(PoolConfig::default());
 //!
 //! let result = pool.get().await;
 //! assert_eq!(result.unwrap_err().to_string(), "unbounded pool is empty");

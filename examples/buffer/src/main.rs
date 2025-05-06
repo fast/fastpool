@@ -47,7 +47,7 @@ async fn main() {
 }
 
 async fn manual_put_pool() {
-    let pool = Pool::<Vec<u8>>::from_config(PoolConfig::new());
+    let pool = Pool::<Vec<u8>>::never_manage(PoolConfig::new());
     pool.put(Vec::with_capacity(1024));
 
     let mut buf = pool.get().await.unwrap();

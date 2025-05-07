@@ -48,7 +48,7 @@ async fn main() {
 
 async fn manual_put_pool() {
     let pool = Pool::<Vec<u8>>::never_manage(PoolConfig::new());
-    pool.put(Vec::with_capacity(1024));
+    pool.extend_one(Vec::with_capacity(1024));
 
     let mut buf = pool.get().await.unwrap();
     write!(&mut buf, "{:?} key=manual_put_pool_put", Instant::now()).unwrap();
@@ -70,7 +70,7 @@ async fn auto_create_pool() {
     write!(&mut buf, "{:?} key=auto_create_pool_0", Instant::now()).unwrap();
     println!("{}", String::from_utf8_lossy(&buf));
 
-    pool.put(Vec::with_capacity(1024));
+    pool.extend_one(Vec::with_capacity(1024));
     let mut buf = pool.get().await.unwrap();
     write!(&mut buf, "{:?} key=auto_create_pool_1", Instant::now()).unwrap();
     println!("{}", String::from_utf8_lossy(&buf));

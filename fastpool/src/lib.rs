@@ -198,9 +198,11 @@
 pub use common::ManageObject;
 pub use common::ObjectStatus;
 pub use common::QueueStrategy;
+pub use retain_spec::RetainResult;
 
 mod common;
 mod mutex;
+mod retain_spec;
 
 pub mod bounded;
 pub mod unbounded;

@@ -102,7 +102,9 @@ use std::sync::Weak;
 use crate::ManageObject;
 use crate::ObjectStatus;
 use crate::QueueStrategy;
+use crate::RetainResult;
 use crate::mutex::Mutex;
+use crate::retain_spec;
 
 /// The configuration of [`Pool`].
 #[derive(Clone, Copy, Debug)]
@@ -388,6 +390,40 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
         }
     }
 
+    /// Retains only the objects that pass the given predicate.
+    ///
+    /// This function blocks the entire pool. Therefore, the given function should not block.
+    ///
+    /// The following example starts a background task that runs every 30 seconds and removes
+    /// objects from the pool that have not been used for more than one minute. The task will
+    /// terminate if the pool is dropped.
+    ///
+    /// ```rust,ignore
+    /// let interval = Duration::from_secs(30);
+    /// let max_age = Duration::from_secs(60);
+    ///
+    /// let weak_pool = Arc::downgrade(&pool);
+    /// tokio::spawn(async move {
+    ///     loop {
+    ///         tokio::time::sleep(interval).await;
+    ///         if let Some(pool) = weak_pool.upgrade() {
+    ///             pool.retain(|_, status| status.last_used().elapsed() < max_age);
+    ///         } else {
+    ///             break;
+    ///         }
+    ///     }
+    /// });
+    /// ```
+    pub fn retain(
+        &self,
+        f: impl FnMut(&mut M::Object, ObjectStatus) -> bool,
+    ) -> RetainResult<M::Object> {
+        let mut slots = self.slots.lock();
+        let result = retain_spec::do_vec_deque_retain(&mut slots.deque, f);
+        slots.current_size -= result.removed.len();
+        result
+    }
+
     /// Returns the current status of the pool.
     ///
     /// The status returned by the pool is not guaranteed to be consistent.
@@ -536,4 +572,20 @@ impl<T, M: ManageObject<Object = T>> UnreadyObject<T, M> {
 struct ObjectState<T> {
     o: T,
     status: ObjectStatus,
+}
+
+impl<T> retain_spec::SealedState for ObjectState<T> {
+    type Object = T;
+
+    fn status(&self) -> ObjectStatus {
+        self.status
+    }
+
+    fn mut_object(&mut self) -> &mut Self::Object {
+        &mut self.o
+    }
+
+    fn take_object(self) -> Self::Object {
+        self.o
+    }
 }

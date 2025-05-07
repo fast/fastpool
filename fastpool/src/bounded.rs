@@ -86,7 +86,9 @@ use mea::semaphore::Semaphore;
 use crate::ManageObject;
 use crate::ObjectStatus;
 use crate::QueueStrategy;
+use crate::RetainResult;
 use crate::mutex::Mutex;
+use crate::retain_spec;
 
 /// The configuration of [`Pool`].
 #[derive(Clone, Copy, Debug)]
@@ -115,16 +117,6 @@ impl PoolConfig {
         self.queue_strategy = queue_strategy;
         self
     }
-}
-
-/// The result returned by [`Pool::retain`].
-#[derive(Debug)]
-#[non_exhaustive]
-pub struct RetainResult<T> {
-    /// The number of retained objects.
-    pub retained: usize,
-    /// The objects removed from the pool.
-    pub removed: Vec<T>,
 }
 
 /// The current pool status.
@@ -288,51 +280,12 @@ impl<M: ManageObject> Pool<M> {
     /// ```
     pub fn retain(
         &self,
-        mut f: impl FnMut(&mut M::Object, ObjectStatus) -> bool,
+        f: impl FnMut(&mut M::Object, ObjectStatus) -> bool,
     ) -> RetainResult<M::Object> {
         let mut slots = self.slots.lock();
-
-        let len = slots.deque.len();
-        let mut idx = 0;
-        let mut cur = 0;
-
-        // Stage 1: All values are retained.
-        while cur < len {
-            let state = &mut slots.deque[cur];
-            if !f(&mut state.o, state.status) {
-                cur += 1;
-                break;
-            }
-            cur += 1;
-            idx += 1;
-        }
-
-        // Stage 2: Swap retained value into current idx.
-        while cur < len {
-            let state = &mut slots.deque[cur];
-            if !f(&mut state.o, state.status) {
-                cur += 1;
-                continue;
-            }
-
-            slots.deque.swap(idx, cur);
-            cur += 1;
-            idx += 1;
-        }
-
-        // Stage 3: Truncate all values after idx.
-        let removed = if cur != idx {
-            let removed = slots.deque.split_off(idx);
-            slots.current_size -= removed.len();
-            removed.into_iter().map(|state| state.o).collect()
-        } else {
-            Vec::new()
-        };
-
-        RetainResult {
-            retained: idx,
-            removed,
-        }
+        let result = retain_spec::do_vec_deque_retain(&mut slots.deque, f);
+        slots.current_size -= result.removed.len();
+        result
     }
 
     /// Returns the current status of the pool.
@@ -524,4 +477,20 @@ impl<M: ManageObject> UnreadyObject<M> {
 struct ObjectState<T> {
     o: T,
     status: ObjectStatus,
+}
+
+impl<T> retain_spec::SealedState for ObjectState<T> {
+    type Object = T;
+
+    fn status(&self) -> ObjectStatus {
+        self.status
+    }
+
+    fn mut_object(&mut self) -> &mut Self::Object {
+        &mut self.o
+    }
+
+    fn take_object(self) -> Self::Object {
+        self.o
+    }
 }

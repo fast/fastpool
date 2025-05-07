@@ -99,7 +99,7 @@
 //! let result = pool.get().await;
 //! assert_eq!(result.unwrap_err().to_string(), "unbounded pool is empty");
 //!
-//! pool.put(Vec::with_capacity(1024));
+//! pool.extend_one(Vec::with_capacity(1024));
 //! let o = pool.get().await.unwrap();
 //! assert_eq!(o.capacity(), 1024);
 //! # }

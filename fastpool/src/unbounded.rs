@@ -38,7 +38,7 @@
 //! let result = pool.get().await;
 //! assert_eq!(result.unwrap_err().to_string(), "unbounded pool is empty");
 //!
-//! pool.put(Vec::with_capacity(1024));
+//! pool.extend_one(Vec::with_capacity(1024));
 //! let o = pool.get().await.unwrap();
 //! assert_eq!(o.capacity(), 1024);
 //! drop(o);
@@ -343,15 +343,49 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
         Ok(object)
     }
 
-    /// Put an object to the pool.
-    pub fn put(&self, o: T) {
+    /// Extends the pool with exactly one object.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use fastpool::unbounded::Pool;
+    /// use fastpool::unbounded::PoolConfig;
+    ///
+    /// let config = PoolConfig::default();
+    /// let pool = Pool::never_manage(config);
+    ///
+    /// pool.extend_one(Vec::<i64>::with_capacity(1024));
+    /// ```
+    pub fn extend_one(&self, o: T) {
+        self.extend(Some(o));
+    }
+
+    /// Extends the pool with the objects of an iterator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use fastpool::unbounded::Pool;
+    /// use fastpool::unbounded::PoolConfig;
+    ///
+    /// let config = PoolConfig::default();
+    /// let pool = Pool::never_manage(config);
+    ///
+    /// pool.extend([
+    ///     Vec::<i64>::with_capacity(1024),
+    ///     Vec::<i64>::with_capacity(512),
+    ///     Vec::<i64>::with_capacity(256),
+    /// ]);
+    /// ```
+    pub fn extend(&self, iter: impl IntoIterator<Item = T>) {
         let mut slots = self.slots.lock();
-        slots.current_size += 1;
-        slots.deque.push_back(ObjectState {
-            o,
-            status: ObjectStatus::default(),
-        });
-        drop(slots);
+        for o in iter {
+            slots.current_size += 1;
+            slots.deque.push_back(ObjectState {
+                o,
+                status: ObjectStatus::default(),
+            });
+        }
     }
 
     /// Returns the current status of the pool.

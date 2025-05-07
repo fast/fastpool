@@ -21,7 +21,7 @@ use fastpool::bounded::Pool;
 use fastpool::bounded::PoolConfig;
 
 #[tokio::test]
-async fn test_simple_replenish() {
+async fn test_replenish() {
     #[derive(Default)]
     struct Manager;
 

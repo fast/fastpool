@@ -222,8 +222,18 @@ impl<M: ManageObject> Pool<M> {
                 return 0;
             }
 
-            // exclude idle objects that already exists
-            permit.release(idles);
+            match permit.split(idles) {
+                None => unreachable!(
+                    "idles ({}) should be less than permits ({})",
+                    idles,
+                    permit.permits()
+                ),
+                Some(p) => {
+                    // reduced by existing idle objects and release the corresponding permits
+                    drop(p);
+                }
+            }
+
             permit.permits()
         };
 
@@ -241,8 +251,13 @@ impl<M: ManageObject> Pool<M> {
                 replenished += 1;
             }
 
-            // always release one permit to unblock other waiters
-            permit.release(1);
+            match permit.split(1) {
+                None => unreachable!("permit must be greater than 0 at this point"),
+                Some(p) => {
+                    // always release one permit to unblock other waiters
+                    drop(p);
+                }
+            }
         }
 
         replenished

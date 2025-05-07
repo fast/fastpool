@@ -202,7 +202,7 @@ impl<M: ManageObject> Pool<M> {
         let mut permit = {
             let mut n = most;
             loop {
-                match self.permits.try_acquire(most) {
+                match self.permits.try_acquire(n) {
                     Some(permit) => break permit,
                     None => {
                         n = n.min(self.permits.available_permits());
@@ -239,11 +239,10 @@ impl<M: ManageObject> Pool<M> {
                 drop(slots);
 
                 replenished += 1;
-                permit.release(1);
-            } else {
-                // always release one permit to unblock other waiters
-                permit.release(1);
             }
+
+            // always release one permit to unblock other waiters
+            permit.release(1);
         }
 
         replenished

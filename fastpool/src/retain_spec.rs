@@ -26,14 +26,20 @@ pub struct RetainResult<T> {
     pub removed: Vec<T>,
 }
 
+/// An internal trait that abstracts over unbounded and bounded `ObjectState`.
 pub(crate) trait SealedState {
+    /// The type of the object.
     type Object;
 
+    /// Returns the status of the object.
     fn status(&self) -> ObjectStatus;
+    /// Returns a mutable reference to the object.
     fn mut_object(&mut self) -> &mut Self::Object;
+    /// Returns the owned object, consuming the state.
     fn take_object(self) -> Self::Object;
 }
 
+/// Shared `VecDeque`'s retain (`extract_if`) implementation for both bounded and unbounded pools.
 pub(crate) fn do_vec_deque_retain<T, State: SealedState<Object = T>>(
     deque: &mut VecDeque<State>,
     mut f: impl FnMut(&mut T, ObjectStatus) -> bool,

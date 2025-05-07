@@ -211,15 +211,21 @@ impl<M: ManageObject> Pool<M> {
                 }
             }
         };
+
         if permit.permits() == 0 {
             return 0;
         }
 
-        let idle_count = self.slots.lock().deque.len();
-        let gap = permit.permits().saturating_sub(idle_count);
-        if gap == 0 {
-            return 0;
-        }
+        let (gap, permit) = {
+            let mut permit = permit;
+            let idle_count = self.slots.lock().deque.len();
+            if idle_count >= permit.permits() {
+                return 0;
+            }
+
+            permit.release(idle_count);
+            (permit.permits(), permit)
+        };
 
         let mut idles = vec![];
         for _ in 0..gap {

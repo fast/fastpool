@@ -197,47 +197,48 @@ impl<M: ManageObject> Pool<M> {
 
     /// Replenishes the pool with at most `most` number of new objects.
     ///
-    /// * Returns `Ok(n)` if successfully replenished `n` objects.
-    /// * Returns `Ok(0)` if no replenishment is needed.
-    /// * Returns `Err(e)` if an error occurred while replenishing.
-    pub async fn replenish(&self, mut most: usize) -> Result<usize, M::Error> {
-        let permit = loop {
-            if most == 0 {
-                return Ok(0);
-            }
-
-            match self.permits.try_acquire(most) {
-                Some(permit) => break permit,
-                None => {
-                    most = most.min(self.permits.available_permits());
-                    continue;
+    /// Returns `n` where `n` is the number of objects added to the pool.
+    pub async fn replenish(&self, most: usize) -> usize {
+        let permit = {
+            let mut n = most;
+            loop {
+                match self.permits.try_acquire(most) {
+                    Some(permit) => break permit,
+                    None => {
+                        n = n.min(self.permits.available_permits());
+                        continue;
+                    }
                 }
             }
         };
+        if permit.permits() == 0 {
+            return 0;
+        }
 
-        most = most.saturating_sub(self.slots.lock().deque.len());
-        if most == 0 {
-            return Ok(0);
+        let idle_count = self.slots.lock().deque.len();
+        let gap = permit.permits().saturating_sub(idle_count);
+        if gap == 0 {
+            return 0;
         }
 
         let mut idles = vec![];
-        for _ in 0..most {
-            let object = self.manager.create().await?;
-            let state = ObjectState {
-                o: object,
-                status: ObjectStatus::default(),
-            };
-            idles.push(state);
+        for _ in 0..gap {
+            if let Ok(o) = self.manager.create().await {
+                let status = ObjectStatus::default();
+                let state = ObjectState { o, status };
+                idles.push(state);
+            }
         }
+        let replenished = idles.len();
 
         let mut slots = self.slots.lock();
+        slots.current_size += replenished;
         slots.deque.extend(idles);
-        slots.current_size += most;
         drop(slots);
 
         // ensure the permit is held at this point
         drop(permit);
-        Ok(most)
+        replenished
     }
 
     /// Retrieves an [`Object`] from this [`Pool`].

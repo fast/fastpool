@@ -49,10 +49,7 @@ impl ConnectionPool {
 
                     let status = pool.status();
                     let gap = status.max_size - status.current_size;
-                    match pool.replenish(gap).await {
-                        Ok(n) => println!("Replenished {n} connections"),
-                        Err(err) => eprintln!("Failed to replenish connections: {err}"),
-                    }
+                    pool.replenish(gap).await;
                 } else {
                     break;
                 }

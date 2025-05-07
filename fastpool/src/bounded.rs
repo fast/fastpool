@@ -195,6 +195,74 @@ impl<M: ManageObject> Pool<M> {
         })
     }
 
+    /// Replenishes the pool with at most `most` number of new objects.
+    ///
+    /// Returns the number of objects that are actually replenished to the pool.
+    pub async fn replenish(&self, most: usize) -> usize {
+        let mut permit = {
+            let mut n = most;
+            loop {
+                match self.permits.try_acquire(n) {
+                    Some(permit) => break permit,
+                    None => {
+                        n = n.min(self.permits.available_permits());
+                        continue;
+                    }
+                }
+            }
+        };
+
+        if permit.permits() == 0 {
+            return 0;
+        }
+
+        let gap = {
+            let idles = self.slots.lock().deque.len();
+            if idles >= permit.permits() {
+                return 0;
+            }
+
+            match permit.split(idles) {
+                None => unreachable!(
+                    "idles ({}) should be less than permits ({})",
+                    idles,
+                    permit.permits()
+                ),
+                Some(p) => {
+                    // reduced by existing idle objects and release the corresponding permits
+                    drop(p);
+                }
+            }
+
+            permit.permits()
+        };
+
+        let mut replenished = 0;
+        for _ in 0..gap {
+            if let Ok(o) = self.manager.create().await {
+                let status = ObjectStatus::default();
+                let state = ObjectState { o, status };
+
+                let mut slots = self.slots.lock();
+                slots.current_size += 1;
+                slots.deque.push_back(state);
+                drop(slots);
+
+                replenished += 1;
+            }
+
+            match permit.split(1) {
+                None => unreachable!("permit must be greater than 0 at this point"),
+                Some(p) => {
+                    // always release one permit to unblock other waiters
+                    drop(p);
+                }
+            }
+        }
+
+        replenished
+    }
+
     /// Retrieves an [`Object`] from this [`Pool`].
     ///
     /// This method should be called with a pool wrapped in an [`Arc`]. If the pool reaches the

@@ -16,17 +16,17 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use fastpool::ObjectStatus;
 use fastpool::bounded::Object;
 use fastpool::bounded::Pool;
 use fastpool::bounded::PoolConfig;
-use fastpool::ObjectStatus;
 use futures::future::BoxFuture;
-use sqlx::postgres::PgConnectOptions;
 use sqlx::Acquire;
 use sqlx::ConnectOptions;
 use sqlx::Connection;
 use sqlx::PgConnection;
 use sqlx::TransactionManager;
+use sqlx::postgres::PgConnectOptions;
 
 #[derive(Debug, Clone)]
 pub struct ConnectionPool {
@@ -46,6 +46,10 @@ impl ConnectionPool {
                 tokio::time::sleep(REAP_IDLE_INTERVAL).await;
                 if let Some(pool) = weak_pool.upgrade() {
                     pool.retain(|_, m| m.last_used().elapsed() < IDLE_TIMEOUT);
+
+                    let status = pool.status();
+                    let gap = status.max_size - status.current_size;
+                    pool.replenish(gap).await;
                 } else {
                     break;
                 }

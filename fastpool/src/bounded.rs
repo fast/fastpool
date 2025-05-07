@@ -197,9 +197,9 @@ impl<M: ManageObject> Pool<M> {
 
     /// Replenishes the pool with at most `most` number of new objects.
     ///
-    /// Returns `n` where `n` is the number of objects added to the pool.
+    /// Returns the number of objects that are actually replenished to the pool.
     pub async fn replenish(&self, most: usize) -> usize {
-        let permit = {
+        let mut permit = {
             let mut n = most;
             loop {
                 match self.permits.try_acquire(most) {
@@ -216,34 +216,36 @@ impl<M: ManageObject> Pool<M> {
             return 0;
         }
 
-        let (gap, permit) = {
-            let mut permit = permit;
-            let idle_count = self.slots.lock().deque.len();
-            if idle_count >= permit.permits() {
+        let gap = {
+            let idles = self.slots.lock().deque.len();
+            if idles >= permit.permits() {
                 return 0;
             }
 
-            permit.release(idle_count);
-            (permit.permits(), permit)
+            // exclude idle objects that already exists
+            permit.release(idles);
+            permit.permits()
         };
 
-        let mut idles = vec![];
+        let mut replenished = 0;
         for _ in 0..gap {
             if let Ok(o) = self.manager.create().await {
                 let status = ObjectStatus::default();
                 let state = ObjectState { o, status };
-                idles.push(state);
+
+                let mut slots = self.slots.lock();
+                slots.current_size += 1;
+                slots.deque.push_back(state);
+                drop(slots);
+
+                replenished += 1;
+                permit.release(1);
+            } else {
+                // always release one permit to unblock other waiters
+                permit.release(1);
             }
         }
-        let replenished = idles.len();
 
-        let mut slots = self.slots.lock();
-        slots.current_size += replenished;
-        slots.deque.extend(idles);
-        drop(slots);
-
-        // ensure the permit is held at this point
-        drop(permit);
         replenished
     }
 

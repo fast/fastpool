@@ -195,6 +195,51 @@ impl<M: ManageObject> Pool<M> {
         })
     }
 
+    /// Replenishes the pool with at most `most` number of new objects.
+    ///
+    /// * Returns `Ok(n)` if successfully replenished `n` objects.
+    /// * Returns `Ok(0)` if no replenishment is needed.
+    /// * Returns `Err(e)` if an error occurred while replenishing.
+    pub async fn replenish(&self, mut most: usize) -> Result<usize, M::Error> {
+        let permit = loop {
+            if most == 0 {
+                return Ok(0);
+            }
+
+            match self.permits.try_acquire(most) {
+                Some(permit) => break permit,
+                None => {
+                    most = most.min(self.permits.available_permits());
+                    continue;
+                }
+            }
+        };
+
+        most = most.saturating_sub(self.slots.lock().deque.len());
+        if most == 0 {
+            return Ok(0);
+        }
+
+        let mut idles = vec![];
+        for _ in 0..most {
+            let object = self.manager.create().await?;
+            let state = ObjectState {
+                o: object,
+                status: ObjectStatus::default(),
+            };
+            idles.push(state);
+        }
+
+        let mut slots = self.slots.lock();
+        slots.deque.extend(idles);
+        slots.current_size += most;
+        drop(slots);
+
+        // ensure the permit is held at this point
+        drop(permit);
+        Ok(most)
+    }
+
     /// Retrieves an [`Object`] from this [`Pool`].
     ///
     /// This method should be called with a pool wrapped in an [`Arc`]. If the pool reaches the

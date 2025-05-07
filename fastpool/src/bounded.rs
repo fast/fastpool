@@ -201,12 +201,12 @@ impl<M: ManageObject> Pool<M> {
     /// maximum size, this method would block until an object is returned to the pool or an object
     /// is detached from the pool.
     pub async fn get(self: &Arc<Self>) -> Result<Object<M>, M::Error> {
-        let permit = self.permits.clone().acquire_owned(1).await;
-
         self.users.fetch_add(1, Ordering::Relaxed);
         let guard = scopeguard::guard((), |()| {
             self.users.fetch_sub(1, Ordering::Relaxed);
         });
+
+        let permit = self.permits.clone().acquire_owned(1).await;
 
         let object = loop {
             let existing = match self.config.queue_strategy {

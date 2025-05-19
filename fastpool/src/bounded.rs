@@ -195,9 +195,16 @@ impl<M: ManageObject> Pool<M> {
         })
     }
 
-    /// Replenishes the pool with at most `most` number of new objects.
+    /// Replenishes the pool with at most `most` number of new objects:
     ///
-    /// Returns the number of objects that are actually replenished to the pool.
+    /// 1. If the pool has fewer slots to fill than `most`, narrow `most` to the number of slots.
+    /// 2. If there is already any idle object in the pool, decrease `most` by the number of idle
+    ///    objects.
+    /// 3. If [`ManageObject::create`] returns `Err`, reduces `most` by 1 and continues to the next.
+    ///
+    /// Returns the number of objects that are actually replenished to the pool. This method is
+    /// suitable to implement functionalities like minimal idle connections in a connection
+    /// pool.
     pub async fn replenish(&self, most: usize) -> usize {
         let mut permit = {
             let mut n = most;

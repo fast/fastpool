@@ -277,6 +277,9 @@ impl<M: ManageObject> Pool<M> {
     /// is detached from the pool.
     pub async fn get(self: &Arc<Self>) -> Result<Object<M>, M::Error> {
         self.users.fetch_add(1, Ordering::Relaxed);
+
+        // TODO(*) replace scopeguard with std DropGuard once stabilized
+        //  https://github.com/rust-lang/rust/issues/144426
         let guard = scopeguard::guard((), |()| {
             self.users.fetch_sub(1, Ordering::Relaxed);
         });

@@ -16,7 +16,7 @@
 name = "fastpool"
 
 description = "This crates implements a fast object pool for Async Rust."
-version = "1.0.2"
+version = "1.0.3"
 
 edition.workspace = true
 homepage.workspace = true

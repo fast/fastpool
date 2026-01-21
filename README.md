@@ -2,14 +2,14 @@
 
 [![Crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]
-[![MSRV 1.80][msrv-badge]](https://www.whatrustisit.com)
+[![MSRV 1.85][msrv-badge]](https://www.whatrustisit.com)
 [![Apache 2.0 licensed][license-badge]][license-url]
 [![Build Status][actions-badge]][actions-url]
 
 [crates-badge]: https://img.shields.io/crates/v/fastpool.svg
 [crates-url]: https://crates.io/crates/fastpool
 [docs-badge]: https://docs.rs/fastpool/badge.svg
-[msrv-badge]: https://img.shields.io/badge/MSRV-1.80-green?logo=rust
+[msrv-badge]: https://img.shields.io/badge/MSRV-1.85-green?logo=rust
 [docs-url]: https://docs.rs/fastpool
 [license-badge]: https://img.shields.io/crates/l/fastpool
 [license-url]: LICENSE
@@ -48,7 +48,7 @@ This project is licensed under [Apache License, Version 2.0](LICENSE).
 
 This library is derived from the [deadpool](https://docs.rs/deadpool/) crate with several dedicated considerations and a quite different mindset.
 
-You can read the FAQ section on [the docs page](https://docs.rs/fastpool/*/fastpool/#faq) for detailed discussion on "Why does fastpool have no timeout config?" and "Why does fastpool have no before/after hooks?"
+You can read the FAQ section on [the docs page](https://docs.rs/fastpool/*/fastpool/#faq) for a detailed discussion on "Why does fastpool have no timeout config?" and "Why does fastpool have no before/after hooks?"
 
 The [postgres example](examples/postgres) and [this issue thread](https://github.com/launchbadge/sqlx/issues/2276#issuecomment-2687157357) is a significant motivation for this crate:
 

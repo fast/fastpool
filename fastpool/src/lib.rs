@@ -195,6 +195,7 @@
 //! }
 //! ```
 
+pub use common::CancellationBehavior;
 pub use common::ManageObject;
 pub use common::ObjectStatus;
 pub use common::QueueStrategy;

@@ -90,3 +90,14 @@ pub enum QueueStrategy {
     /// This strategy behaves like a stack.
     Lifo,
 }
+
+/// Behavior when a `get()` call is cancelled during the `is_recyclable()` check.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum CancellationBehavior {
+    /// Detach the object from the pool (default).
+    #[default]
+    Detach,
+
+    /// Return the object to the pool for potential reuse.
+    ReturnToPool,
+}

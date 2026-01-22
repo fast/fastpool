@@ -99,6 +99,7 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use crate::CancellationBehavior;
 use crate::ManageObject;
 use crate::ObjectStatus;
 use crate::QueueStrategy;
@@ -114,6 +115,9 @@ pub struct PoolConfig {
     ///
     /// Determines the order of objects being queued and dequeued.
     pub queue_strategy: QueueStrategy,
+
+    /// Behavior when a `get()` call is cancelled
+    pub cancellation_behavior: CancellationBehavior,
 }
 
 impl Default for PoolConfig {
@@ -127,12 +131,19 @@ impl PoolConfig {
     pub fn new() -> Self {
         Self {
             queue_strategy: QueueStrategy::default(),
+            cancellation_behavior: CancellationBehavior::default(),
         }
     }
 
     /// Returns a new [`PoolConfig`] with the specified queue strategy.
     pub fn with_queue_strategy(mut self, queue_strategy: QueueStrategy) -> Self {
         self.queue_strategy = queue_strategy;
+        self
+    }
+
+    /// Returns a new [`PoolConfig`] with the specified cancellation behavior.
+    pub fn with_cancellation_behavior(mut self, cancellation_behavior: CancellationBehavior) -> Self {
+        self.cancellation_behavior = cancellation_behavior;
         self
     }
 }
@@ -324,6 +335,7 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
                     let mut unready_object = UnreadyObject {
                         state: Some(object),
                         pool: Arc::downgrade(self),
+                        cancellation_behavior: self.config.cancellation_behavior,
                     };
 
                     let state = unready_object.state();
@@ -337,6 +349,10 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
                         state.status.recycle_count += 1;
                         state.status.recycled = Some(std::time::Instant::now());
                         break unready_object.ready();
+                    } else {
+                        // We need to manually detach here as the drop implementation
+                        // depends on the cancellation behaviour
+                        unready_object.detach();
                     }
                 }
             };
@@ -538,14 +554,37 @@ impl<T, M: ManageObject<Object = T>> Object<T, M> {
     }
 }
 
-/// A wrapper of ObjectStatus that detaches the object from the pool when dropped.
+/// A wrapper of ObjectState used during the `is_recyclable` check in `Pool::get`.
+///
+/// If the check passes, the object is converted to a ready `Object` via `ready()`.
+/// If the check fails, `detach()` should be called to permanently remove the object
+/// from the pool. If dropped without calling either method (due to cancellation),
+/// the behavior depends on the pool's [`CancellationBehavior`] configuration.
 struct UnreadyObject<T, M: ManageObject<Object = T> = NeverManageObject<T>> {
     state: Option<ObjectState<T>>,
     pool: Weak<Pool<T, M>>,
+    cancellation_behavior: CancellationBehavior,
 }
 
 impl<T, M: ManageObject<Object = T>> Drop for UnreadyObject<T, M> {
     fn drop(&mut self) {
+        if let Some(mut state) = self.state.take() {
+            if let Some(pool) = self.pool.upgrade() {
+                match self.cancellation_behavior {
+                    CancellationBehavior::Detach => {
+                        pool.detach_object(&mut state.o);
+                    }
+                    CancellationBehavior::ReturnToPool => {
+                        pool.push_back(state);
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl<T, M: ManageObject<Object = T>> UnreadyObject<T, M> {
+    fn detach(&mut self) {
         if let Some(mut state) = self.state.take() {
             if let Some(pool) = self.pool.upgrade() {
                 pool.detach_object(&mut state.o);

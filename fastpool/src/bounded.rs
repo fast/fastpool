@@ -124,7 +124,10 @@ impl PoolConfig {
     }
 
     /// Returns a new [`PoolConfig`] with the specified cancellation behavior.
-    pub fn with_cancellation_behavior(mut self, cancellation_behavior: CancellationBehavior) -> Self {
+    pub fn with_cancellation_behavior(
+        mut self,
+        cancellation_behavior: CancellationBehavior,
+    ) -> Self {
         self.cancellation_behavior = cancellation_behavior;
         self
     }

@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use fastpool::CancellationBehavior;
@@ -55,9 +56,10 @@ impl ManageObject for SlowRecycleManager {
 }
 
 mod bounded_tests {
-    use super::*;
     use fastpool::bounded::Pool;
     use fastpool::bounded::PoolConfig;
+
+    use super::*;
 
     /// Test default behavior (Detach): cancelled get() calls detach objects from the pool.
     #[tokio::test]
@@ -75,8 +77,7 @@ mod bounded_tests {
         assert_eq!(pool.status().current_size, 1);
         assert_eq!(pool.status().idle_count, 1);
 
-        let timeout_result =
-            tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
+        let timeout_result = tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
         assert!(timeout_result.is_err(), "Should have timed out");
 
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -89,7 +90,11 @@ mod bounded_tests {
 
         let obj = pool.get().await.unwrap();
         assert_eq!(*obj, 1, "Should be a new object (id=1)");
-        assert_eq!(created_count.load(Ordering::SeqCst), 2, "Two objects should have been created");
+        assert_eq!(
+            created_count.load(Ordering::SeqCst),
+            2,
+            "Two objects should have been created"
+        );
     }
 
     /// Test ReturnToPool behavior: cancelled get() calls return objects to the pool.
@@ -111,8 +116,7 @@ mod bounded_tests {
         assert_eq!(pool.status().current_size, 1);
         assert_eq!(pool.status().idle_count, 1);
 
-        let timeout_result =
-            tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
+        let timeout_result = tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
         assert!(timeout_result.is_err(), "Should have timed out");
 
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -167,7 +171,8 @@ mod bounded_tests {
         );
     }
 
-    /// Test that failed is_recyclable still properly detaches objects (regardless of cancellation behavior).
+    /// Test that failed is_recyclable still properly detaches objects (regardless of cancellation
+    /// behavior).
     #[tokio::test]
     async fn test_failed_recyclable_still_detaches() {
         const MAX_SIZE: usize = 1;
@@ -185,16 +190,22 @@ mod bounded_tests {
 
         let obj = pool.get().await.unwrap();
         assert_eq!(*obj, 0, "Should get the recycled object");
-        assert_eq!(obj.status().recycle_count(), 1, "Should have been recycled once");
+        assert_eq!(
+            obj.status().recycle_count(),
+            1,
+            "Should have been recycled once"
+        );
     }
 }
 
 mod unbounded_tests {
-    use super::*;
     use fastpool::unbounded::Pool;
     use fastpool::unbounded::PoolConfig;
 
-    /// Test default behavior (Detach): cancelled get() calls detach objects from the unbounded pool.
+    use super::*;
+
+    /// Test default behavior (Detach): cancelled get() calls detach objects from the unbounded
+    /// pool.
     #[tokio::test]
     async fn test_default_detach_behavior() {
         let created_count = Arc::new(AtomicUsize::new(0));
@@ -209,8 +220,7 @@ mod unbounded_tests {
         assert_eq!(pool.status().current_size, 1);
         assert_eq!(pool.status().idle_count, 1);
 
-        let timeout_result =
-            tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
+        let timeout_result = tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
         assert!(timeout_result.is_err(), "Should have timed out");
 
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -223,7 +233,11 @@ mod unbounded_tests {
 
         let obj = pool.get().await.unwrap();
         assert_eq!(*obj, 1, "Should be a new object (id=1)");
-        assert_eq!(created_count.load(Ordering::SeqCst), 2, "Two objects should have been created");
+        assert_eq!(
+            created_count.load(Ordering::SeqCst),
+            2,
+            "Two objects should have been created"
+        );
     }
 
     /// Test ReturnToPool behavior: cancelled get() calls return objects to the unbounded pool.
@@ -231,8 +245,8 @@ mod unbounded_tests {
     async fn test_return_to_pool_behavior() {
         let created_count = Arc::new(AtomicUsize::new(0));
         let manager = SlowRecycleManager::new(created_count.clone(), Duration::from_millis(100));
-        let config = PoolConfig::new()
-            .with_cancellation_behavior(CancellationBehavior::ReturnToPool);
+        let config =
+            PoolConfig::new().with_cancellation_behavior(CancellationBehavior::ReturnToPool);
         let pool = Pool::new(config, manager);
 
         let obj = pool.get().await.unwrap();
@@ -244,8 +258,7 @@ mod unbounded_tests {
         assert_eq!(pool.status().current_size, 1);
         assert_eq!(pool.status().idle_count, 1);
 
-        let timeout_result =
-            tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
+        let timeout_result = tokio::time::timeout(Duration::from_millis(10), pool.get()).await;
         assert!(timeout_result.is_err(), "Should have timed out");
 
         tokio::time::sleep(Duration::from_millis(10)).await;
@@ -270,8 +283,8 @@ mod unbounded_tests {
     async fn test_multiple_cancelled_gets_with_return_to_pool() {
         let created_count = Arc::new(AtomicUsize::new(0));
         let manager = SlowRecycleManager::new(created_count.clone(), Duration::from_millis(100));
-        let config = PoolConfig::new()
-            .with_cancellation_behavior(CancellationBehavior::ReturnToPool);
+        let config =
+            PoolConfig::new().with_cancellation_behavior(CancellationBehavior::ReturnToPool);
         let pool = Pool::new(config, manager);
 
         let obj1 = pool.get().await.unwrap();

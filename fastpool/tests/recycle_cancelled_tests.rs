@@ -18,9 +18,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use fastpool::CancellationBehavior;
 use fastpool::ManageObject;
 use fastpool::ObjectStatus;
+use fastpool::RecycleCancelledStrategy;
 
 struct SlowRecycleManager {
     created_count: Arc<AtomicUsize>,
@@ -104,7 +104,7 @@ mod bounded_tests {
         let created_count = Arc::new(AtomicUsize::new(0));
         let manager = SlowRecycleManager::new(created_count.clone(), Duration::from_millis(100));
         let config = PoolConfig::new(MAX_SIZE)
-            .with_cancellation_behavior(CancellationBehavior::ReturnToPool);
+            .with_recycle_cancelled_strategy(RecycleCancelledStrategy::ReturnToPool);
         let pool = Pool::new(config, manager);
 
         let obj = pool.get().await.unwrap();
@@ -148,7 +148,7 @@ mod bounded_tests {
         let created_count = Arc::new(AtomicUsize::new(0));
         let manager = SlowRecycleManager::new(created_count.clone(), Duration::from_millis(100));
         let config = PoolConfig::new(MAX_SIZE)
-            .with_cancellation_behavior(CancellationBehavior::ReturnToPool);
+            .with_recycle_cancelled_strategy(RecycleCancelledStrategy::ReturnToPool);
         let pool = Pool::new(config, manager);
 
         let obj1 = pool.get().await.unwrap();
@@ -171,15 +171,14 @@ mod bounded_tests {
         );
     }
 
-    /// Test that failed is_recyclable still properly detaches objects (regardless of cancellation
-    /// behavior).
+    /// Test that failed is_recyclable always properly detaches objects.
     #[tokio::test]
     async fn test_failed_recyclable_still_detaches() {
         const MAX_SIZE: usize = 1;
         let created_count = Arc::new(AtomicUsize::new(0));
         let manager = SlowRecycleManager::new(created_count.clone(), Duration::from_millis(10));
         let config = PoolConfig::new(MAX_SIZE)
-            .with_cancellation_behavior(CancellationBehavior::ReturnToPool);
+            .with_recycle_cancelled_strategy(RecycleCancelledStrategy::ReturnToPool);
         let pool = Pool::new(config, manager);
 
         let obj = pool.get().await.unwrap();
@@ -245,8 +244,8 @@ mod unbounded_tests {
     async fn test_return_to_pool_behavior() {
         let created_count = Arc::new(AtomicUsize::new(0));
         let manager = SlowRecycleManager::new(created_count.clone(), Duration::from_millis(100));
-        let config =
-            PoolConfig::new().with_cancellation_behavior(CancellationBehavior::ReturnToPool);
+        let config = PoolConfig::new()
+            .with_recycle_cancelled_strategy(RecycleCancelledStrategy::ReturnToPool);
         let pool = Pool::new(config, manager);
 
         let obj = pool.get().await.unwrap();
@@ -283,8 +282,8 @@ mod unbounded_tests {
     async fn test_multiple_cancelled_gets_with_return_to_pool() {
         let created_count = Arc::new(AtomicUsize::new(0));
         let manager = SlowRecycleManager::new(created_count.clone(), Duration::from_millis(100));
-        let config =
-            PoolConfig::new().with_cancellation_behavior(CancellationBehavior::ReturnToPool);
+        let config = PoolConfig::new()
+            .with_recycle_cancelled_strategy(RecycleCancelledStrategy::ReturnToPool);
         let pool = Pool::new(config, manager);
 
         let obj1 = pool.get().await.unwrap();

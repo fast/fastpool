@@ -198,6 +198,7 @@
 pub use common::ManageObject;
 pub use common::ObjectStatus;
 pub use common::QueueStrategy;
+pub use common::RecycleCancelledStrategy;
 pub use retain_spec::RetainResult;
 
 mod common;

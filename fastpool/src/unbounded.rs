@@ -102,6 +102,7 @@ use std::sync::Weak;
 use crate::ManageObject;
 use crate::ObjectStatus;
 use crate::QueueStrategy;
+use crate::RecycleCancelledStrategy;
 use crate::RetainResult;
 use crate::mutex::Mutex;
 use crate::retain_spec;
@@ -114,6 +115,9 @@ pub struct PoolConfig {
     ///
     /// Determines the order of objects being queued and dequeued.
     pub queue_strategy: QueueStrategy,
+
+    /// Strategy when recycling object has been cancelled.
+    pub recycle_cancelled_strategy: RecycleCancelledStrategy,
 }
 
 impl Default for PoolConfig {
@@ -127,12 +131,22 @@ impl PoolConfig {
     pub fn new() -> Self {
         Self {
             queue_strategy: QueueStrategy::default(),
+            recycle_cancelled_strategy: RecycleCancelledStrategy::default(),
         }
     }
 
     /// Returns a new [`PoolConfig`] with the specified queue strategy.
     pub fn with_queue_strategy(mut self, queue_strategy: QueueStrategy) -> Self {
         self.queue_strategy = queue_strategy;
+        self
+    }
+
+    /// Returns a new [`PoolConfig`] with the specified recycle cancelled strategy.
+    pub fn with_recycle_cancelled_strategy(
+        mut self,
+        recycle_cancelled_strategy: RecycleCancelledStrategy,
+    ) -> Self {
+        self.recycle_cancelled_strategy = recycle_cancelled_strategy;
         self
     }
 }
@@ -324,6 +338,7 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
                     let mut unready_object = UnreadyObject {
                         state: Some(object),
                         pool: Arc::downgrade(self),
+                        recycle_cancelled_strategy: self.config.recycle_cancelled_strategy,
                     };
 
                     let state = unready_object.state();
@@ -337,6 +352,10 @@ impl<T, M: ManageObject<Object = T>> Pool<T, M> {
                         state.status.recycle_count += 1;
                         state.status.recycled = Some(std::time::Instant::now());
                         break unready_object.ready();
+                    } else {
+                        // We need to manually detach here as the drop implementation
+                        // depends on the recycle cancelled strategy.
+                        unready_object.detach();
                     }
                 }
             };
@@ -538,17 +557,30 @@ impl<T, M: ManageObject<Object = T>> Object<T, M> {
     }
 }
 
-/// A wrapper of ObjectStatus that detaches the object from the pool when dropped.
+/// A wrapper of ObjectState used during the `is_recyclable` check in `Pool::get`.
+///
+/// If the check passes, the object is converted to a ready `Object` via `ready()`.
+/// If the check fails, `detach()` should be called to permanently remove the object
+/// from the pool. If dropped without calling either method (due to being cancelled),
+/// the behavior depends on the pool's [`RecycleCancelledStrategy`] configuration.
 struct UnreadyObject<T, M: ManageObject<Object = T> = NeverManageObject<T>> {
     state: Option<ObjectState<T>>,
     pool: Weak<Pool<T, M>>,
+    recycle_cancelled_strategy: RecycleCancelledStrategy,
 }
 
 impl<T, M: ManageObject<Object = T>> Drop for UnreadyObject<T, M> {
     fn drop(&mut self) {
         if let Some(mut state) = self.state.take() {
             if let Some(pool) = self.pool.upgrade() {
-                pool.detach_object(&mut state.o);
+                match self.recycle_cancelled_strategy {
+                    RecycleCancelledStrategy::Detach => {
+                        pool.detach_object(&mut state.o);
+                    }
+                    RecycleCancelledStrategy::ReturnToPool => {
+                        pool.push_back(state);
+                    }
+                }
             }
         }
     }
@@ -560,6 +592,14 @@ impl<T, M: ManageObject<Object = T>> UnreadyObject<T, M> {
         let state = Some(self.state.take().unwrap());
         let pool = self.pool.clone();
         Object { state, pool }
+    }
+
+    fn detach(&mut self) {
+        if let Some(mut state) = self.state.take() {
+            if let Some(pool) = self.pool.upgrade() {
+                pool.detach_object(&mut state.o);
+            }
+        }
     }
 
     fn state(&mut self) -> &mut ObjectState<T> {

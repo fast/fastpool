@@ -90,3 +90,25 @@ pub enum QueueStrategy {
     /// This strategy behaves like a stack.
     Lifo,
 }
+
+/// Strategy when recycling object has been cancelled.
+///
+/// This enum controls the behavior when the recycling process (specifically the
+/// [`ManageObject::is_recyclable`] check) is cancelled; for example, when the
+/// `get()` future is dropped.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum RecycleCancelledStrategy {
+    /// Detach the object from the pool.
+    ///
+    /// This is the safest option. If the recycling check is cancelled, we assume the object might
+    /// be in an unknown state or that the check was taking too long for a reason. The object will
+    /// detach from the pool.
+    #[default]
+    Detach,
+
+    /// Return the object to the pool for potential reuse.
+    ///
+    /// This assumes that interrupting the check does not invalidate the object. The object is put
+    /// back into the pool.
+    ReturnToPool,
+}

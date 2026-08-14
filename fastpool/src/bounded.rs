@@ -80,8 +80,8 @@ use std::sync::Weak;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use mea::semaphore::OwnedSemaphorePermit;
-use mea::semaphore::Semaphore;
+use asyncband::semaphore::OwnedSemaphorePermit;
+use asyncband::semaphore::Semaphore;
 
 use crate::ManageObject;
 use crate::ObjectStatus;

@@ -1,5 +1,9 @@
 # Fastpool
 
+> [!WARNING]
+>
+> Fastpool is deprecated and is being archived. Development has moved to [`asyncband::pool`](https://docs.rs/asyncband/0.7.1/asyncband/pool/), which is the maintained successor. Fastpool 1.1.2 is the final planned release.
+
 [![Crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]
 [![MSRV 1.85][msrv-badge]](https://www.whatrustisit.com)
@@ -22,13 +26,17 @@ Fastpool provides fast and runtime-agnostic object pools for Async Rust.
 
 You can read [the docs page](https://docs.rs/fastpool/*/fastpool/) for a complete overview of the library.
 
-## Installation
+## Migration
 
-Add the dependency to your `Cargo.toml` via:
+Replace the Fastpool dependency with AsyncBand's `pool` feature:
 
 ```shell
-cargo add fastpool
+cargo add asyncband --features pool
 ```
+
+Fastpool's root items are available under `asyncband::pool`, while `bounded` and `unbounded` remain submodules. For example, replace `fastpool::{ManageObject, bounded}` with `asyncband::pool::{ManageObject, bounded}`.
+
+AsyncBand 0.7.1 also strengthens several pool contracts. In particular, `bounded::Pool::replenish` is now `replenish_to` and returns a `Result`, and `bounded::PoolStatus::wait_count` has been removed. Review the [AsyncBand pool documentation](https://docs.rs/asyncband/0.7.1/asyncband/pool/) when migrating those APIs.
 
 ## Documentation
 

@@ -15,8 +15,8 @@
 [package]
 name = "fastpool"
 
-description = "This crates implements a fast object pool for Async Rust."
-version = "1.1.1"
+description = "DEPRECATED: Use asyncband::pool for runtime-agnostic async object pools."
+version = "1.1.2"
 
 edition.workspace = true
 homepage.workspace = true

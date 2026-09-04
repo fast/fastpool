@@ -19,7 +19,7 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 publish = false
-rust-version = "1.86.0"
+rust-version = "1.85.0"
 
 [workspace.dependencies]
 fastpool = { path = "../fastpool" }

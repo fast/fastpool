@@ -46,7 +46,7 @@ This project is licensed under [Apache License, Version 2.0](LICENSE).
 
 ## Origins
 
-This library is derived from the [deadpool](https://docs.rs/deadpool/) crate with several dedicated considerations and a quite different mindset.
+This library is a reimplementation of the [deadpool](https://docs.rs/deadpool/) crate with several dedicated considerations and a quite different mindset.
 
 You can read the FAQ section on [the docs page](https://docs.rs/fastpool/*/fastpool/#faq) for a detailed discussion on "Why does fastpool have no timeout config?" and "Why does fastpool have no before/after hooks?"
 

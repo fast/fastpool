@@ -22,7 +22,7 @@ homepage = "https://github.com/fast/fastpool"
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/fast/fastpool"
-rust-version = "1.85.0"
+rust-version = "1.86.0"
 
 [workspace.lints.rust]
 unknown_lints = "deny"

@@ -12,9 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![deprecated(
+    since = "1.2.0",
+    note = "Fastpool is no longer maintained; use asyncband::pool instead"
+)]
 #![deny(missing_docs)]
 
 //! Fastpool provides fast and runtime-agnostic object pools for Async Rust.
+//!
+//! # Deprecation
+//!
+//! Fastpool is no longer maintained. Use [`asyncband::pool`](https://docs.rs/asyncband/0.7/asyncband/pool/), the maintained successor. See the repository README for migration notes.
 //!
 //! This crate provides two implementations: [bounded pool](bounded::Pool) and
 //! [unbounded pool](unbounded::Pool).

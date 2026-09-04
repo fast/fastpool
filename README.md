@@ -1,15 +1,19 @@
 # Fastpool
 
+> [!WARNING]
+>
+> Fastpool is deprecated and is being archived. Development has moved to [`asyncband::pool`](https://docs.rs/asyncband/0.7/asyncband/pool/), which is the maintained successor. Fastpool 1.2.0 is the final planned release.
+
 [![Crates.io][crates-badge]][crates-url]
 [![Documentation][docs-badge]][docs-url]
-[![MSRV 1.85][msrv-badge]](https://www.whatrustisit.com)
+[![MSRV 1.86][msrv-badge]](https://www.whatrustisit.com)
 [![Apache 2.0 licensed][license-badge]][license-url]
 [![Build Status][actions-badge]][actions-url]
 
 [crates-badge]: https://img.shields.io/crates/v/fastpool.svg
 [crates-url]: https://crates.io/crates/fastpool
 [docs-badge]: https://docs.rs/fastpool/badge.svg
-[msrv-badge]: https://img.shields.io/badge/MSRV-1.85-green?logo=rust
+[msrv-badge]: https://img.shields.io/badge/MSRV-1.86-green?logo=rust
 [docs-url]: https://docs.rs/fastpool
 [license-badge]: https://img.shields.io/crates/l/fastpool
 [license-url]: LICENSE
@@ -22,13 +26,17 @@ Fastpool provides fast and runtime-agnostic object pools for Async Rust.
 
 You can read [the docs page](https://docs.rs/fastpool/*/fastpool/) for a complete overview of the library.
 
-## Installation
+## Migration
 
-Add the dependency to your `Cargo.toml` via:
+Replace the Fastpool dependency with AsyncBand's `pool` feature:
 
 ```shell
-cargo add fastpool
+cargo add asyncband --features pool
 ```
+
+Fastpool's root items are available under `asyncband::pool`, while `bounded` and `unbounded` remain submodules. For example, replace `fastpool::{ManageObject, bounded}` with `asyncband::pool::{ManageObject, bounded}`.
+
+AsyncBand 0.7 also strengthens several pool contracts. In particular, `bounded::Pool::replenish` is now `replenish_to` and returns a `Result`, and `bounded::PoolStatus::wait_count` has been removed. Review the [AsyncBand pool documentation](https://docs.rs/asyncband/0.7/asyncband/pool/) when migrating those APIs.
 
 ## Documentation
 
@@ -36,7 +44,7 @@ Read the online documents at https://docs.rs/fastpool.
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate is built against the latest stable release, and its minimum supported rustc version is 1.85.0.
+This crate is built against the latest stable release, and its minimum supported rustc version is 1.86.0.
 
 The policy is that the minimum Rust version required to use this crate can be increased in minor version updates. For example, if Fastpool 1.0 requires Rust 1.20.0, then Fastpool 1.0.z for all values of z will also require Rust 1.20.0 or newer. However, Fastpool 1.y for y > 0 may require a newer minimum version of Rust.
 
